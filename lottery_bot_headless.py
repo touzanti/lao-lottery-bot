@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Lao Lottery Video Bot - Headless version for GitHub Actions
-àºàº²àº§à»àº«àº¼àº MP4 àºàº²àº 2 à»àº§àº±àº lottery à»àº¥à»àº§àºªàº»à»àº Telegram
+ດາວໂຫຼດ MP4 ຈາກ 2 ເວັບ lottery ແລ້ວສົ່ງ Telegram
 """
 
 import asyncio
@@ -19,12 +19,12 @@ WEBS = [
     {
         "name": "web1",
         "url": "https://timely-cendol-9b1ed2.netlify.app/",
-        "caption": "ð² àº«àº§àºàº¥àº²àº§ àºàº²àº¡àºªàº±àº",
+        "caption_template": "ລວມບັນຫາຫວຍ\ud83c\uddbb\ud83c\uddf3\ud83c\uddf1\ud83c\udde6\ud83c\uddf9\ud83c\udded\nວັນທີ\u0ec8 {date}(ເວລາ{time}ໂມງ)",
     },
     {
         "name": "web2",
         "url": "https://bunha-deang.netlify.app/",
-        "caption": "ð´ àºàº²àº¡àºªàº±àºà»àºàº - àº«àº§àºàº¥àº²àº§",
+        "caption_template": "ບັນຫາຫວຍ\ud83c\uddf1\ud83c\udde6\ud83c\uddbb\ud83c\uddf3\ud83c\uddf9\ud83c\udded\nປະຈຳງວດ ວັນທີ {date} ( ເວລາ{time})",
     },
 ]
 
@@ -32,10 +32,12 @@ SAVE_DIR = Path("/tmp/lottery_videos")
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def send_video(path: Path, caption: str) -> bool:
+def send_video(path, caption_template):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendVideo"
-    today = datetime.now().strftime("%d/%m/%Y")
-    full_caption = f"{caption}\nð àºàº§àºàº§àº±àºàºàºµ {today}"
+    now = datetime.now()
+    date_str = now.strftime("%d/%m/%Y")
+    time_str = now.strftime("%H:%M")
+    full_caption = caption_template.format(date=date_str, time=time_str)
     with open(path, "rb") as f:
         r = requests.post(
             url,
@@ -45,17 +47,16 @@ def send_video(path: Path, caption: str) -> bool:
         )
     result = r.json()
     if result.get("ok"):
-        print(f"  â Telegram OK: {path.name}")
+        print(f"  ✅ Telegram OK: {path.name}")
         return True
     else:
-        print(f"  â Telegram error: {result}")
+        print(f"  ❌ Telegram error: {result}")
         return False
 
 
-async def download_video(page, web: dict) -> Path | None:
-    print(f"\nâ {web['name']}: {web['url']}")
+async def download_video(page, web):
+    print(f"\n\u2192 {web['name']}: {web['url']}")
 
-    # Inject visibility override before navigation
     await page.add_init_script("""
         Object.defineProperty(document, 'hidden', { get: () => false });
         Object.defineProperty(document, 'visibilityState', { get: () => 'visible' });
@@ -64,55 +65,52 @@ async def download_video(page, web: dict) -> Path | None:
     await page.goto(web["url"], wait_until="networkidle", timeout=30000)
     await page.wait_for_timeout(2000)
 
-    # àºàº­àº Random button
-    for sel in ["#btn-random", "button:has-text('Random')", "button:has-text('àºªàº¸à»àº¡')"]:
+    for sel in ["#btn-random", "button:has-text('Random')", "button:has-text('ສຸ\u0ec8ມ')"]:
         try:
             loc = page.locator(sel)
             if await loc.count() > 0:
                 await loc.first.click()
-                print("  â Clicked Random")
+                print("  ✓ Clicked Random")
                 await page.wait_for_timeout(1500)
                 break
         except Exception:
             pass
 
-    # àºàº­àº video/MP4 button
     btn_video = None
-    for sel in ["#btn-video", "button:has-text('MP4')", "button:has-text('àº§àº´àºàºµà»àº­')", "button:has-text('Video')"]:
+    for sel in ["#btn-video", "button:has-text('MP4')", "button:has-text('ວິດີໂອ')", "button:has-text('Video')"]:
         try:
             loc = page.locator(sel)
             if await loc.count() > 0:
                 btn_video = loc.first
-                print(f"  â Found video btn: {sel}")
+                print(f"  ✓ Found video btn: {sel}")
                 break
         except Exception:
             pass
 
     if not btn_video:
-        print("  â Video button not found")
+        print("  ❌ Video button not found")
         return None
 
-    # àº¥à» download
     ts = datetime.now().strftime("%H%M%S")
     save_path = SAVE_DIR / f"lottery_{web['name']}_{ts}.mp4"
 
     try:
         async with page.expect_download(timeout=60000) as dl:
             await btn_video.click()
-            print("  â³ Waiting for video render (~6s)...")
+            print("  ⏳ Waiting for video render (~6s)...")
         download = await dl.value
         await download.save_as(str(save_path))
         size_kb = save_path.stat().st_size // 1024
-        print(f"  â Saved: {save_path.name} ({size_kb} KB)")
+        print(f"  ✅ Saved: {save_path.name} ({size_kb} KB)")
         return save_path
     except Exception as e:
-        print(f"  â Download error: {e}")
+        print(f"  ❌ Download error: {e}")
         return None
 
 
 async def main():
     if not BOT_TOKEN or not CHAT_ID:
-        print("â Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID env vars")
+        print("❌ Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID env vars")
         sys.exit(1)
 
     print(f"[{datetime.now().strftime('%H:%M')}] Lao Lottery Bot starting...")
@@ -140,11 +138,11 @@ async def main():
             try:
                 path = await download_video(page, web)
                 if path:
-                    send_video(path, web["caption"])
+                    send_video(path, web["caption_template"])
                 else:
                     errors.append(web["name"])
             except Exception as e:
-                print(f"  â {web['name']}: {e}")
+                print(f"  ❌ {web['name']}: {e}")
                 errors.append(web["name"])
             finally:
                 await page.close()
@@ -152,10 +150,10 @@ async def main():
         await browser.close()
 
     if errors:
-        print(f"\nâ  Failed: {errors}")
+        print(f"\n⚠ Failed: {errors}")
         sys.exit(1)
     else:
-        print("\nâ All done!")
+        print("\n✅ All done!")
 
 
 if __name__ == "__main__":
