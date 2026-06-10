@@ -1,0 +1,32 @@
+name: Hanoi Lottery Monitor
+
+on:
+  schedule:
+      - cron: '10 7 * * *'
+    workflow_dispatch:
+
+jobs:
+  hanoi-monitor:
+    runs-on: ubuntu-latest
+      timeout-minutes: 420
+
+      steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+        - name: Install dependencies
+        run: |
+          pip install playwright requests
+          playwright install chromium --with-deps
+
+        - name: Run Hanoi Monitor (14:10 - 21:00 Lao time)
+          env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python hanoi_monitor.py
+          
